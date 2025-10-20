@@ -114,10 +114,11 @@ def create_api_server(
             browser_tool_index = 0
             for entry in entries:
                 entry_dict = entry.to_dict()
-                if len(entry_dict.get("recipient", "")) > 0 and is_not_builtin_tool(entry_dict["recipient"]):
+                recipient = entry_dict.get("recipient")
+                if isinstance(recipient, str) and len(recipient) > 0 and is_not_builtin_tool(recipient):
                     call = entry_dict["content"][0]
                     arguments = call["text"]
-                    name = entry_dict["recipient"]
+                    name = recipient
 
                     if name.startswith("functions."):
                         name = name[len("functions.") :]
@@ -138,9 +139,14 @@ def create_api_server(
                             call_id=call_id,
                         )
                     )
-                elif len(entry_dict.get("recipient", "")) > 0 and entry_dict["recipient"].startswith("browser.") and browser_tool is not None:
+                elif (
+                    isinstance(recipient, str)
+                    and len(recipient) > 0
+                    and recipient.startswith("browser.")
+                    and browser_tool is not None
+                ):
                     # Mirror event-based creation of WebSearchCallItems when the browser tool is invoked
-                    name = entry_dict["recipient"]
+                    name = recipient
                     call = entry_dict["content"][0]
                     arguments = call["text"]
                     function_name = name[len("browser."):]
