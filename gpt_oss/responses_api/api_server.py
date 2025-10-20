@@ -653,7 +653,7 @@ def create_api_server(
                                     ResponseWebSearchCallInProgress(
                                         type="response.web_search_call.in_progress",
                                         output_index=current_output_index,
-                                        id=web_search_call_id
+                                        item_id=web_search_call_id
                                     )
                                 )
 
@@ -667,7 +667,7 @@ def create_api_server(
                                 ResponseWebSearchCallSearching(
                                     type="response.web_search_call.searching",
                                     output_index=current_output_index,
-                                    id=web_search_call_id,
+                                    item_id=web_search_call_id,
                                 )
                             )
                             result = await run_tool()
@@ -689,7 +689,7 @@ def create_api_server(
                                 ResponseWebSearchCallCompleted(
                                     type="response.web_search_call.completed",
                                     output_index=current_output_index,
-                                    id=web_search_call_id,
+                                    item_id=web_search_call_id,
                                 )
                             )
                             yield self._send_event(ResponseOutputItemDone(
