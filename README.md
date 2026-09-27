@@ -111,6 +111,66 @@ lms get openai/gpt-oss-120b
 
 Check out our [awesome list](./awesome-gpt-oss.md) for a broader collection of gpt-oss resources and inference partners.
 
+## Use gpt-oss inside your own project
+
+`gpt_oss.sdk` is a small library layer for putting gpt-oss inside an app, bot, service or script. It handles the [harmony format][harmony], tool calling, streaming and conversation history, so your code only deals with prompts, Python functions and replies. The same code runs against a local server or in-process weights.
+
+Install it from this repository (the SDK is newer than the `gpt-oss` release on PyPI):
+
+```shell
+pip install "gpt-oss @ git+https://github.com/The-new-ben/gpt-oss"
+```
+
+```python
+from gpt_oss import GptOss, tool
+
+@tool
+def get_weather(city: str) -> str:
+    """Get the current weather for a city.
+
+    Args:
+        city: City name, e.g. "Paris".
+    """
+    return "sunny, 21C"
+
+model = GptOss.ollama("gpt-oss:20b")  # any backend below works the same way
+
+# One-off question. Tools are plain functions: the schema comes from type hints and the docstring.
+reply = model.ask("What's the weather in Paris?", tools=[get_weather])
+print(reply.text)        # final answer
+print(reply.reasoning)   # chain of thought (don't show it to end users)
+print(reply.tool_calls)  # the calls the model made, with their outputs
+
+# A conversation that keeps its history, with streaming.
+chat = model.chat(instructions="You are a concise assistant.", tools=[get_weather], reasoning_effort="low")
+for event in chat.stream("And in Tokyo?"):
+    if event.type == "text":
+        print(event.text, end="", flush=True)
+
+# Save and resume later, for example between web requests.
+saved = chat.history  # JSON-serializable
+chat = model.chat(tools=[get_weather], history=saved)
+```
+
+Where the model runs:
+
+| Constructor | Runs on |
+| --- | --- |
+| `GptOss.ollama("gpt-oss:20b")` | A local [Ollama](#ollama) server |
+| `GptOss.openai_compatible(base_url, model, api_key=None)` | Any OpenAI-compatible `/chat/completions` server: `vllm serve`, LM Studio, llama.cpp or a hosted provider |
+| `GptOss.local(checkpoint, backend="triton")` | This process, using this repo's `triton`, `torch`, `vllm`, `metal` or `transformers` implementation (`backend="auto"` picks metal on Apple Silicon, else triton) |
+| `GptOss.from_generator(obj)` / `GptOss.from_next_token_fn(fn)` | Your own token-level backend |
+
+Details:
+
+- **Async:** `await model.aask(...)`, `await chat.asend(...)` and `async for event in chat.astream(...)` work in FastAPI, Discord bots and other async apps. The model runs on a worker thread, and `async def` tools run on your event loop.
+- **Tools:** accept sync or async functions. Arguments may use `str`, `int`, `float`, `bool`, `list`, `dict`, `Literal`, `Enum`, `Optional`, `Annotated[T, "description"]` and pydantic models. Return values that aren't strings are sent to the model as JSON. If a tool raises, the model sees the error text and can retry.
+- **Built-in tools:** in-process backends can also run the harmony-native [browser](#browser) and [python](#python) tools. Pass them in the same list: `tools=[SimpleBrowserTool(backend=ExaBackend(source="web"))]`.
+- **Limits:** `max_output_tokens` caps each generation, and `max_tool_rounds` (default 8) caps the rounds of tool calls per message. `reply.finish_reason` says which one stopped the model.
+- **Concurrency:** use one `Chat` per conversation. In-process backends keep one KV cache, so generations are serialized across chats. HTTP backends run chats in parallel.
+
+See [`examples/sdk/quickstart.py`](examples/sdk/quickstart.py) for a runnable example.
+
 ## About this repository
 
 This repository provides a collection of reference implementations:
@@ -122,6 +182,8 @@ This repository provides a collection of reference implementations:
 - **Tools:**
   - [`browser`](#browser) — a reference implementation of the browser tool the models got trained on
   - [`python`](#python) — a stateless reference implementation of the python tool the model got trained on
+- **Library:**
+  - [`sdk`](#use-gpt-oss-inside-your-own-project) — embed gpt-oss in your own code with tool calling, streaming and chat history, on top of any of the backends
 - **Client examples:**
   - [`chat`](#terminal-chat) — a basic terminal chat application that uses the PyTorch or Triton implementations for inference along with the python and browser tools
   - [`responses_api`](#responses-api) — an example Responses API compatible server that implements the browser tool along with other Responses-compatible functionality
