@@ -1,0 +1,16 @@
+[
+  {
+    "generation": 0,
+    "sessions": 1,
+    "avg_reveal_rate": 0.0,
+    "avg_turn_of_reveal": null,
+    "playbook": null
+  },
+  {
+    "generation": 1,
+    "sessions": 1,
+    "avg_reveal_rate": 0.6666666666666666,
+    "avg_turn_of_reveal": 3.0,
+    "playbook": "- confront_with_evidence + ראיה: חשפה מידע ב-0 מתוך 2 שאלות\n- timeline_lock + ראיה: חשפה מידע ב-0 מתוך 1 שאלות\n- commit_then_confront: חשפה מידע ב-0 מתוך 1 שאלות\n- open_question: חשפה מידע ב-0 מתוך 1 שאלות\nמידע שעדיין לא נחשף אף פעם: S1, S2, S3. כדאי לחפש ראיה שמתאימה לו."
+  }
+]
