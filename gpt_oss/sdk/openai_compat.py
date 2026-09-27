@@ -107,6 +107,9 @@ class OpenAICompatibleEngine(Engine):
                 call = dataclasses.replace(call, output=output)
                 calls.append(call)
                 yield Event("tool_result", tool_call=call)
+            if any(getattr(config.function(p["name"]), "ends_turn", False) for p in pending):
+                finish_reason = "tool"
+                break
 
         reply = Reply(
             text="\n".join(text),

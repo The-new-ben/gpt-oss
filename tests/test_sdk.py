@@ -482,3 +482,87 @@ def test_openai_compatible_rejects_builtin_tools(chat_server):
     url, script, received = chat_server
     with pytest.raises(GptOssError, match="local backend"):
         GptOss.openai_compatible(url, "m").ask("hi", tools=[FakeBrowser()])
+
+
+def test_ends_turn_tool_stops_the_turn(local_model, harmony_encoding):
+    captured = []
+
+    @tool(ends_turn=True)
+    def submit(answer: str) -> str:
+        captured.append(answer)
+        return "saved"
+
+    submit_call = '<|channel|>commentary to=functions.submit <|constrain|>json<|message|>{"answer":"42"}<|call|>'
+    model, generator = local_model(submit_call)  # a second generation would fail: nothing scripted
+    reply = model.ask("Answer", tools=[submit])
+    assert captured == ["42"]
+    assert reply.finish_reason == "tool"
+    assert len(generator.prompts) == 1
+
+
+def test_ends_turn_over_http(chat_server):
+    url, script, received = chat_server
+    script.append((200, sse_chunks(
+        {"tool_calls": [{"index": 0, "id": "c1", "function": {"name": "submit", "arguments": '{"answer": "42"}'}}]},
+        finish_reason="tool_calls",
+    )))
+
+    @tool(ends_turn=True)
+    def submit(answer: str) -> str:
+        return "saved"
+
+    reply = GptOss.openai_compatible(url, "m").ask("Answer", tools=[submit])
+    assert reply.finish_reason == "tool"
+    assert reply.tool_calls[0].output == "saved"
+    assert len(received) == 1
+
+
+def test_llama_cpp_backend_is_selected_for_gguf(monkeypatch):
+    from gpt_oss.sdk import client, llama_cpp
+
+    created = {}
+
+    class FakeLlama(llama_cpp.LlamaCppGenerator):
+        def __init__(self, path, *, context):
+            created.update(path=path, context=context)
+
+    monkeypatch.setattr(llama_cpp, "LlamaCppGenerator", FakeLlama)
+    generator = client.load_generator("model.gguf", context=2048)
+    assert isinstance(generator, FakeLlama)
+    assert created == {"path": "model.gguf", "context": 2048}
+
+
+def test_llama_cpp_forks_swap_prompt_caches(monkeypatch):
+    import threading
+
+    from gpt_oss.sdk import llama_cpp
+
+    class FakeLlama:
+        def __init__(self):
+            self._gpt_oss_lock = threading.Lock()
+            self._gpt_oss_owner = None
+            self.cache = None  # stands in for the KV cache contents
+            self.resets = 0
+
+        def reset(self):
+            self.cache = None
+            self.resets += 1
+
+        def generate(self, tokens, **kwargs):
+            self.cache = list(tokens)
+            yield 7
+            yield 99
+
+    monkeypatch.setattr(llama_cpp, "_save_kv", lambda llm: llm.cache)
+    monkeypatch.setattr(llama_cpp, "_load_kv", lambda llm, saved: setattr(llm, "cache", saved))
+
+    llm = FakeLlama()
+    a = llama_cpp.LlamaCppGenerator(llm=llm)
+    b = a.fork()
+    assert list(a.generate([1, 2], stop_tokens=[99])) == [7, 99]
+    assert list(b.generate([3, 4], stop_tokens=[99])) == [7, 99]
+    assert a._saved == [1, 2]  # a's cache was saved when b took over
+    list(a.generate([1, 2, 5], stop_tokens=[99]))
+    assert b._saved == [3, 4] and llm.cache == [1, 2, 5]
+    assert llm.resets == 2  # a and b each started from an empty cache once
+    assert list(b.generate([3], stop_tokens=[99], max_tokens=1)) == [7]

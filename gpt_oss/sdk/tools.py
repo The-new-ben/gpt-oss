@@ -36,6 +36,10 @@ class FunctionTool:
     description: str
     parameters: dict[str, Any]
     fn: Callable[..., Any]
+    # When True, calling this tool ends the model's turn: the reply is returned
+    # right after the tool runs instead of letting the model continue. Useful for
+    # "submit" style tools that capture structured output.
+    ends_turn: bool = False
     # Parameters annotated with a pydantic model are validated into that model.
     _models: dict[str, type[pydantic.BaseModel]] = dataclasses.field(default_factory=dict, repr=False)
 
@@ -88,6 +92,7 @@ def tool(
     *,
     name: str | None = None,
     description: str | None = None,
+    ends_turn: bool = False,
 ) -> Any:
     """Decorator that exposes a function to the model.
 
@@ -102,7 +107,9 @@ def tool(
                 city: City name, e.g. "Paris".
             '''
 
-    Sync and async functions are both supported.
+    Sync and async functions are both supported. With ``ends_turn=True`` the
+    model's turn stops as soon as the tool has run (``reply.finish_reason`` is
+    ``"tool"``), which is a cheap way to get structured output.
     """
 
     def wrap(f: Callable[..., Any]) -> FunctionTool:
@@ -113,6 +120,7 @@ def tool(
             description=description if description is not None else doc_description,
             parameters=parameters,
             fn=f,
+            ends_turn=ends_turn,
             _models=models,
         )
 

@@ -183,6 +183,10 @@ class HarmonyEngine(Engine):
             call = dataclasses.replace(call, output="\n".join(_text_of(m) for m in results))
             calls.append(call)
             yield Event("tool_result", tool_call=call)
+            fn = config.function(call.name) if last.recipient.startswith("functions.") else None
+            if fn is not None and fn.ends_turn:
+                finish_reason = "tool"
+                break
 
         reply = Reply(
             text="\n".join(text),

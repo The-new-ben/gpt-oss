@@ -43,7 +43,8 @@ class Reply:
     text: str
     reasoning: str = ""
     tool_calls: list[ToolCall] = field(default_factory=list)
-    # "stop", "length" (hit max_output_tokens) or "max_tool_rounds"
+    # "stop", "length" (hit max_output_tokens), "max_tool_rounds" or
+    # "tool" (an ``ends_turn`` tool ran)
     finish_reason: str = "stop"
     usage: Usage = field(default_factory=Usage)
 

@@ -16,7 +16,7 @@ from .openai_compat import OpenAICompatibleEngine
 from .tools import FunctionTool, as_function_tool, caller_loop
 from .types import Event, GptOssError, Reply
 
-LOCAL_BACKENDS = ("triton", "torch", "vllm", "metal", "transformers")
+LOCAL_BACKENDS = ("triton", "torch", "vllm", "metal", "transformers", "llama_cpp")
 
 
 class GptOss:
@@ -92,8 +92,9 @@ class GptOss:
         """Load the weights into this process.
 
         `backend` is one of ``triton``, ``torch``, ``vllm``, ``metal``,
-        ``transformers`` or ``auto`` (metal on Apple Silicon, else triton).
-        `context` is the KV-cache size used by the triton backend.
+        ``transformers``, ``llama_cpp`` (a ``.gguf`` file, runs on CPU) or
+        ``auto`` (llama_cpp for ``.gguf`` files, metal on Apple Silicon, else
+        triton). `context` is the KV-cache size used by triton and llama_cpp.
         """
         generator = load_generator(
             checkpoint, backend, context=context, tensor_parallel_size=tensor_parallel_size
@@ -284,6 +285,8 @@ def load_generator(
 ) -> TokenGenerator:
     """Load one of this repository's inference implementations as a `TokenGenerator`."""
     checkpoint = os.path.expanduser(checkpoint)
+    if backend == "auto" and checkpoint.endswith(".gguf"):
+        backend = "llama_cpp"
     if backend == "auto":
         on_apple_silicon = platform.system() == "Darwin" and platform.machine() == "arm64"
         backend = "metal" if on_apple_silicon else "triton"
@@ -300,6 +303,10 @@ def load_generator(
         from gpt_oss.vllm.token_generator import TokenGenerator as VLLMGenerator
 
         return VLLMGenerator(checkpoint, tensor_parallel_size=tensor_parallel_size)
+    if backend == "llama_cpp":
+        from .llama_cpp import LlamaCppGenerator
+
+        return LlamaCppGenerator(checkpoint, context=context)
     if backend == "metal":
         from gpt_oss.responses_api.inference.metal import setup_model
     elif backend == "transformers":
